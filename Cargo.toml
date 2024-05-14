@@ -1,0 +1,15 @@
+[package]
+name = "tss_prefilter"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+# Another option for a FAISS crate
+#  faiss4rs = "1.6.306"
+
+[dependencies]
+clap = { version = "4.4.11", features = ["derive"] }
+rand = "0.8"
+faiss = "0.12.1"
+bincode = "1.3"
