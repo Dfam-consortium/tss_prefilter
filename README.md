@@ -106,6 +106,16 @@ installed a RepeatMasker/RepeatModeler distribution on your system.
    an estimated size of 54GB for the index.
    However you can build multiple smaller indices and search them in parallel.  This is a
    technique used here: https://github.com/facebookresearch/faiss/wiki/Indexing-1T-vectors#building-the-index
+ * Currently I keep all neighbors returned by the search (albeit on a family basis and not a kmer basis).  That
+   means that all that is sufficient for a family to be reported is that there is at least one kmer sketch in
+   the query that is similar (top 10 for that query kmer) to a kmer sketch in the family.  We should look at
+   ways to reduce the number of candidates returned ( e.g multiple k-mer sketches in a row co-linearly match the same family ).
+
+
+
+
+
+
 
    
 
