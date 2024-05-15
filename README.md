@@ -94,7 +94,7 @@ installed a RepeatMasker/RepeatModeler distribution on your system.
  * This currently uses a 4 character alphabet.  All IUB codes are converted to 'A's.
  * The sketch parameters and k-mer window size were chosen to be compatible with the
    TSS Align method. 
- * Took 3hr 15min (single threaded) to build an index with 44,294 TE sequences (71MB).  The
+ * Took 3hr 15min to build an index with 44,294 TE sequences (71MB).  The
    index is 684MB in size.
       - With 10 nearest neighbors for each plus-strand K-mer in SVA (stride=1), and 
         10 nearest neighbors for each minus-strand K-mer in SVA (stride=1), the search
@@ -102,6 +102,12 @@ installed a RepeatMasker/RepeatModeler distribution on your system.
       - Aligning (threads=4) SVA to the 10,847 candidates took 12s.
       - Aligning (threads=4) SVA to the full 44,294 TE set took 39s.
 
+   At this rate it would take 10 days to build a monolithic index of all 3.5M TE sequences with
+   an estimated size of 54GB for the index.
+   However you can build multiple smaller indices and search them in parallel.  This is a
+   technique used here: https://github.com/facebookresearch/faiss/wiki/Indexing-1T-vectors#building-the-index
+
+   
 
 Robert Hubley 5/2024
 
