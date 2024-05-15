@@ -94,6 +94,13 @@ installed a RepeatMasker/RepeatModeler distribution on your system.
  * This currently uses a 4 character alphabet.  All IUB codes are converted to 'A's.
  * The sketch parameters and k-mer window size were chosen to be compatible with the
    TSS Align method. 
+ * Took 3hr 15min (single threaded) to build an index with 44,294 TE sequences (71MB).  The
+   index is 684MB in size.
+      - With 10 nearest neighbors for each plus-strand K-mer in SVA (stride=1), and 
+        10 nearest neighbors for each minus-strand K-mer in SVA (stride=1), the search
+        took < 1s and produced 10,847 candidates.
+      - Aligning (threads=4) SVA to the 10,847 candidates took 12s.
+      - Aligning (threads=4) SVA to the full 44,294 TE set took 39s.
 
 
 Robert Hubley 5/2024
