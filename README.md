@@ -3,6 +3,20 @@
 
 ## Description
 
+This is an experimental Rust implementation of an alignment prefilter.  
+The prefilter is based on the Tensor Slide Sketch (TSS) algorithm [https://www.biorxiv.org/content/10.1101/2020.11.13.381814v5.abstract]
+and nearest neighbor search using the FAISS library [https://github.com/facebookresearch/faiss]. Used in conjunction 
+with a more expensive alignment step, the prefilter reduces the number of sequences that need to be aligned. 
+
+*TSS Method*
+Fast Alignment-Free Similarity Estimation By Tensor Sketching
+Amir Joudaki, Gunnar Rätsch, André Kahles
+bioRxiv 2020.11.13.381814; doi: https://doi.org/10.1101/2020.11.13.381814
+
+*TSS Align Method*
+Joudaki, A., Meterez, A., Mustafa, H., Koerkamp, R.G., Kahles, A. and Rätsch, G., 2023. 
+Aligning distant sequences to graphs using long seed sketches. Genome Research, 33(7), pp.1208-1217.
+
 
 ## Dependencies
 
@@ -74,6 +88,13 @@ installed a RepeatMasker/RepeatModeler distribution on your system.
 ```
 /bin/time target/release/tss_prefilter --search | scripts/alignQueryToSet.pl
 ```
+
+## Implementation Details and Work in Progress
+
+ * This currently uses a 4 character alphabet.  All IUB codes are converted to 'A's.
+ * The sketch parameters and k-mer window size were chosen to be compatible with the
+   TSS Align method. 
+
 
 Robert Hubley 5/2024
 
