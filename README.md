@@ -3,23 +3,25 @@
 
 ## Description
 
-This is an experimental Rust implementation of an alignment prefilter.  
-The prefilter is based on the Tensor Slide Sketch (TSS) algorithm [https://www.biorxiv.org/content/10.1101/2020.11.13.381814v5.abstract]
-and nearest neighbor search using the FAISS library [https://github.com/facebookresearch/faiss]. Used in conjunction 
-with a more expensive alignment step, the prefilter reduces the number of sequences that need to be aligned. 
+This is an experimental Rust implementation of an alignment prefilter. 
+The prefilter is based on the Tensor Slide Sketch (TSS) algorithm 
+and nearest neighbor search using the FAISS library 
+[https://github.com/facebookresearch/faiss]. Used in conjunction with 
+a more expensive alignment step, the prefilter reduces the number 
+of sequences that need to be aligned. 
 
-*TSS Method*
+*TSS Method*  
 Fast Alignment-Free Similarity Estimation By Tensor Sketching
 Amir Joudaki, Gunnar Rätsch, André Kahles
 bioRxiv 2020.11.13.381814; doi: https://doi.org/10.1101/2020.11.13.381814
 
-*TSS Align Method*
+*TSS Align Method*  
 Joudaki, A., Meterez, A., Mustafa, H., Koerkamp, R.G., Kahles, A. and Rätsch, G., 2023. 
 Aligning distant sequences to graphs using long seed sketches. Genome Research, 33(7), pp.1208-1217.
 
 
 ## Dependencies
-
+You will need the FAISS dynamic libraries installed to build this project.
 FAIS 1.8.0  : https://github.com/facebookresearch/faiss/archive/refs/tags/v1.8.0.tar.gz
 
 ```
@@ -29,8 +31,8 @@ FAIS 1.8.0  : https://github.com/facebookresearch/faiss/archive/refs/tags/v1.8.0
 % make -C build -j faiss
 % make -C build install
 ```
-### Does not appear to install C library files by default
 
+Does not appear to install C library files by default
 ```
 % cd build/c_api
 % cp lib* /usr/local/lib
@@ -44,14 +46,14 @@ FAIS 1.8.0  : https://github.com/facebookresearch/faiss/archive/refs/tags/v1.8.0
 
 ## Example
 
-### Build a small index on a subset of the Dfam TE consensus sequences
+#### Build a small index on a subset of the Dfam TE consensus sequences
 
 ```
 % head -n 1000 data/Dfam36-human.fa > sequences.fasta
 % /bin/time target/release/tss_prefilter build
 ```
 
-### Search for the nearest neighbors to query sequence(s)
+#### Search for the nearest neighbors to query sequence(s)
 
 First create a file called 'query.fasta' containing one or more query sequences in FASTA format.
 Here we use mir.fa from the data directory.
@@ -62,7 +64,7 @@ Then run the search command.
 % target/release/tss_prefilter search
 ```
 
-### Build a larger index using a chunk of Dfam36 representing all of the human TEs (plus some more)
+#### Build a larger index using a chunk of Dfam36 representing all of the human TEs (plus some more)
 
 ```
 % rm faiss.index
@@ -70,7 +72,7 @@ Then run the search command.
 % /bin/time target/release/tss_prefilter --build
 ```
 
-### Search for the nearest neighbors to SVA
+#### Search for the nearest neighbors to SVA
 This TE family is known to contain a bit of Alu, HERVK, and LTR5 elements
 
 ```
@@ -78,7 +80,7 @@ This TE family is known to contain a bit of Alu, HERVK, and LTR5 elements
 % target/release/tss_prefilter --search  
 ```
 
-### Align candidates and lookup TE names for identifiers
+#### Align candidates and lookup TE names for identifiers
 This is just an example script and will not work out-of-the-box.  It is meant to
 demonstrate how to use the output of the search command to align the candidates.
 It also performs a lookup of the TE names for the identifiers.  NOTE: It can be
