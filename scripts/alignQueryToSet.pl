@@ -41,12 +41,16 @@ while ( <> ) {
     my $subj_idx = $1;
     my $distance = $2;
     my $label_count = $3;
-    print OUT ">$dfToName{$seqs[$subj_idx]->[0]}  $seqs[$subj_idx]->[0]\n$seqs[$subj_idx]->[1]\n";
+    my $label = $dfToName{$seqs[$subj_idx]->[0]};
+    if ( $label eq "" ) {
+      $label = $seqs[$subj_idx]->[0];
+    }
+    print OUT ">$label  $seqs[$subj_idx]->[0]\n$seqs[$subj_idx]->[1]\n";
   }
 }
 close OUT;
 
-system("/home/rhubley/projects/RepeatModeler/util/align.pl tmpSeqs.fa query.fasta");
+system("/home/rhubley/projects/RepeatModeler/util/align.pl -force tmpSeqs.fa query.fasta");
  
 
 exit;

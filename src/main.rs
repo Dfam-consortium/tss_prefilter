@@ -175,6 +175,7 @@ The index is comprised of Tensor Slide Sketches stored in Facebook AI Similarity
     if args.search {
         let mut index = read_index("index.faiss").unwrap();
 
+        let nearest_neighbors = 10;
         match parse_fasta("query.fasta") {
             Ok(sequences) => {
                 for (i, sequence) in sequences.iter().enumerate() {
@@ -183,11 +184,11 @@ The index is comprised of Tensor Slide Sketches stored in Facebook AI Similarity
                         continue;
                     }
                     let sketches = tensor.compute_slide_sketch_1d(&sequence, 80, 1, 16, 8);
-                    let result = index.search(&sketches, 10).unwrap();
+                    let result = index.search(&sketches, nearest_neighbors).unwrap();
     
                     let rc_sequence = reverse_complement(&sequence);
                     let rc_sketches = tensor.compute_slide_sketch_1d(&rc_sequence, 80, 1, 16, 8);
-                    let rc_result = index.search(&rc_sketches, 10).unwrap();
+                    let rc_result = index.search(&rc_sketches, nearest_neighbors).unwrap();
     
                     let mut all_results = result;
                     all_results.distances.extend(rc_result.distances);
