@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::{BufReader, BufRead, Result};
+use std::time::Instant;
 
 use clap::Args;
 use clap::Command;
@@ -138,32 +139,61 @@ The index is comprised of Tensor Slide Sketches stored in Facebook AI Similarity
 
     if args.build {
         // Create a new index
+        println!("Initializing the index...");
+        let mut t = Instant::now();
         let num_sketches_in_kmer = ((k_param - w_param + 1) as f64 / s_param as f64).ceil() as u32; 
         let index = index_factory(sketch_dim as u32 * num_sketches_in_kmer, "HNSW32", faiss::MetricType::L2).unwrap();
         let mut index = IdMap::new(index).unwrap();
+        println!("  Index initialized in {:?}", t.elapsed());
 
+        // Read sequences from the FASTA file
+        println!("Reading sequences from the FASTA file...");
         match parse_fasta("sequences.fasta") {
             Ok(sequences) => {
+                let mut batch = Vec::new();
+                let mut ids = Vec::new();
                 for (i, sequence) in sequences.iter().enumerate() {
 
+                    // For debugging/timing
                     //println!("Sequence {}: {:?}", i + 1, sequence);
-                    println!("Sketching Sequence {}", i + 1);
+                    //print!("Sketching Sequence {} ", i + 1);
+                    //t = Instant::now();
+
                     if sequence.len() < 100 {
                             continue;
                     }
                     let sketches = tensor.compute_slide_sketch_1d(&sequence, 80, 80, 16, 8);
+
                     //println!("Sketches of the sequence: {:?}", sketches);
     
                     let kmer_count = (sequence.len() as f64 / 80.0).floor() as usize;
-    
-                    let mut ids = Vec::with_capacity(kmer_count);
+
+                    batch.extend(sketches);
                     for _j in 0..kmer_count {
                         ids.push(Idx::new(i as u64));
                     }
-                
-                    // Add vectors to the index
-                    index.train(&sketches).unwrap();
-                    index.add_with_ids(&sketches, &ids).unwrap();
+                    //println!("in {:?}", t.elapsed());
+
+                    // Add vectors to the index once we reach an adequate batch size
+                    if i > 0 && i % 100000 == 0 {
+                        println!("Adding a batch of sketches ( sequences {} .. {} ) to the index...", i - batch.len(), i);
+                        t = Instant::now();
+                        // This form of index does not need training.  This probably just did
+                        // nothing anyway, but for efficiency I removed the call altogether.
+                        //index.train(&sketches).unwrap();
+                        index.add_with_ids(&batch, &ids).unwrap();
+                        batch.clear();
+                        ids.clear();
+                        println!("Added sketches to the index in {:?}", t.elapsed());
+                    }
+                }
+                if batch.len() > 0  {
+                    println!("Adding the last batch of sketches to the index...");
+                    // This form of index does not need training.  This probably just did
+                    // nothing anyway, but for efficiency I removed the call altogether.
+                    //index.train(&sketches).unwrap();
+                    index.add_with_ids(&batch, &ids).unwrap();
+                    println!("Added sketches to the index in {:?}", t.elapsed());
                 }
             }
             Err(e) => eprintln!("Error parsing FASTA file: {:?}", e),

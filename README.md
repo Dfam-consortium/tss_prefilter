@@ -94,6 +94,10 @@ installed a RepeatMasker/RepeatModeler distribution on your system.
 
 ## Stats
 
+ UPDATE: The following stats are out of date.  The current implementation is much faster at building
+         the index.  Turns out that FAISS.add_with_ids() is parallelized, so calling this function
+         with a large batch of vectors is much faster than adding them one at a time. 
+
  * Small Index ( 44,294 TE sequences, 71 mbases ):
     * Index Build: 3hr 15min
     * Index Size: 684MB
@@ -113,13 +117,16 @@ installed a RepeatMasker/RepeatModeler distribution on your system.
     * Aligning (threads=4) SVA to the full 732,993 TE set took 9 min 51s (3112 alignments)
     * NOTE: Expected results of Alu/HERVK were not returned in this search as there are many results that are equally distant in the larger index. Choice of nearest neighbor parameter will impact this but also increase the number of candidates requiring alignment.  
 
-    
+
 
 ## Implementation Details and Work in Progress
 
  * This currently uses a 4 character alphabet.  All IUB codes are converted to 'A's.
  * The sketch parameters and k-mer window size were chosen to be compatible with the
    TSS Align method. 
+ * Unlike tss_align we do not store a unique id per k-mer, rather we store the ID of the family from 
+   which the k-mer originated.  This simplification allows for quickly referencing the family, but 
+   does not allow for easily locating the position of the indexed k-mer within the family.
  * Explore building index in parallel on independent segments of the database and join
    them in the end to create a monolithic index *or* search them independently and join
    the results. E.g. https://github.com/facebookresearch/faiss/wiki/Indexing-1T-vectors#building-the-index
@@ -131,12 +138,6 @@ installed a RepeatMasker/RepeatModeler distribution on your system.
  * How costly is it to delete or incrementally add new families to the index?
 
 
-
-
-
-
-
-   
 
 Robert Hubley 5/2024
 
