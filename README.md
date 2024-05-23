@@ -94,29 +94,21 @@ installed a RepeatMasker/RepeatModeler distribution on your system.
 
 ## Stats
 
- UPDATE: The following stats are out of date.  The current implementation is much faster at building
-         the index.  Turns out that FAISS.add_with_ids() is parallelized, so calling this function
-         with a large batch of vectors is much faster than adding them one at a time. 
-
- * Small Index ( 44,294 TE sequences, 71 mbases ):
-    * Index Build: 3hr 15min
-    * Index Size: 684MB
-    * With 10 nearest neighbors for each plus-strand K-mer in SVA (stride=1), and 
-      10 nearest neighbors for each minus-strand K-mer in SVA (stride=1), the search
-      took < 1s and produced 10,847 candidates.
-    * Aligning (threads=4) SVA to the 10,847 candidates took 12s.
-    * Aligning (threads=4) SVA to the full 44,294 TE set took 39s.
-    * At this rate it would take 10 days to build a monolithic index of all Dfam_3.8 3.5M TE sequences with
-      an estimated size of 54GB for a monolithic index buitl on a single cpu.
-
  * Dfam_3.6 ( 732,993 TE sequences, 968 mbases )
-    * Index Build: 65hr 15min ( monolithic index built on single cpu )
+    * Index Build: 1hr 56min on 64 cores, 128GB RAM (on machine...not necessarily used)
     * Index Size: 8.9GB
     * Searching SVA took 8.3 seconds ( TODO: need to break out index search vs result [eg. sorting and duplicate removal] processing time ).  This produced 19,874 candidates.
     * Aligning (threads=4) SVA to the 19,874 candidates took 24s (692 alignments)
     * Aligning (threads=4) SVA to the full 732,993 TE set took 9 min 51s (3112 alignments)
     * NOTE: Expected results of Alu/HERVK were not returned in this search as there are many results that are equally distant in the larger index. Choice of nearest neighbor parameter will impact this but also increase the number of candidates requiring alignment.  
 
+ * Dfam_3.8 ( 3,574,077 families)
+   * Index Build: 10hrs 54min on 64 cores, 128GB RAM (on machine...not necessarily used)
+   * Index Size: 43.5GB
+   * Search with SVA_A took 135s to load the index into memory and 2.2s to search for candidates.  This produced 21,557 candidates at 10 nearest neighbors per kmer.
+   * Aligning (threads=4) SVA to the 21,557 candidates tool 27s and produced 585 alignments (missing Alu/HERVK, but finding LTR5 other SVAs etc.)
+   * Aligning (threads=4) SVA to the full 3.5M TE set took
+   * At 10 nearest neighbors Alu/HERVK are missed owing the the large number of equivalent distances (to DR records) in the index. Increasing the nearest neighbor parameter will increase the number of candidates requiring alignment.  This is a tradeoff between sensitivity and the number of candidates requiring alignment.
 
 
 ## Implementation Details and Work in Progress
@@ -127,9 +119,10 @@ installed a RepeatMasker/RepeatModeler distribution on your system.
  * Unlike tss_align we do not store a unique id per k-mer, rather we store the ID of the family from 
    which the k-mer originated.  This simplification allows for quickly referencing the family, but 
    does not allow for easily locating the position of the indexed k-mer within the family.
- * Explore building index in parallel on independent segments of the database and join
-   them in the end to create a monolithic index *or* search them independently and join
-   the results. E.g. https://github.com/facebookresearch/faiss/wiki/Indexing-1T-vectors#building-the-index
+ * Cannot build a HNSWFlat index in parallel.  Or you could but merging the indexes would take as much time
+   as building it monolithically.  I suppose you could search each of these indexes in parallel and merge the
+   results but that would a pain.  Should explore IVF indexes that can be built in parallel but perhaps have
+   lower recall than HNSWFlat.
  * The current implementation collapses all k-mer matches to the set of distinct families identified by the
    k-mers.  The positional information of the kmers nor the relationship between them are utilized to further
    cull the set of candidate families.  That means that a single k-mer (80bp) match between query/index is

@@ -41,7 +41,21 @@ while ( <> ) {
     my $subj_idx = $1;
     my $distance = $2;
     my $label_count = $3;
-    my $label = $dfToName{$seqs[$subj_idx]->[0]};
+    my $label = "";
+    if ( $seqs[$subj_idx]->[0] =~ /(\S+)\#(\S+)/ ) {
+      my $tID = $1;
+      my $tCL = $2;
+      if ( $tID =~ /(D[FR])\d\d(\d\d\d\d\d\d\d)/ ) {
+        $tID = $1 . $2;
+      }
+      if ( exists $dfToName{$tID} ) {
+        $label = $dfToName{$tID} . "#" . $tCL;
+      }else {
+        $label = $dfToName{$seqs[$subj_idx]->[0]};
+      }
+    }else {
+      $label = $dfToName{$seqs[$subj_idx]->[0]};
+    }
     if ( $label eq "" ) {
       $label = $seqs[$subj_idx]->[0];
     }

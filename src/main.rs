@@ -176,7 +176,7 @@ The index is comprised of Tensor Slide Sketches stored in Facebook AI Similarity
 
                     // Add vectors to the index once we reach an adequate batch size
                     if i > 0 && i % 100000 == 0 {
-                        println!("Adding a batch of sketches ( sequences {} .. {} ) to the index...", i - batch.len(), i);
+                        println!("Adding a batch of sketches ( sequences {} .. {} ) to the index...", i - 100000, i);
                         t = Instant::now();
                         // This form of index does not need training.  This probably just did
                         // nothing anyway, but for efficiency I removed the call altogether.
@@ -203,9 +203,12 @@ The index is comprised of Tensor Slide Sketches stored in Facebook AI Similarity
     }
 
     if args.search {
+        let mut t = Instant::now();
         let mut index = read_index("index.faiss").unwrap();
+        println!("# Read index into memory in {:?}", t.elapsed());
 
         let nearest_neighbors = 10;
+        t = Instant::now();
         match parse_fasta("query.fasta") {
             Ok(sequences) => {
                 for (i, sequence) in sequences.iter().enumerate() {
@@ -251,6 +254,7 @@ The index is comprised of Tensor Slide Sketches stored in Facebook AI Similarity
             }
             Err(e) => eprintln!("Error parsing FASTA file: {:?}", e),
         }
+        println!("# Total search time {:?}", t.elapsed());
     }
 }
 
