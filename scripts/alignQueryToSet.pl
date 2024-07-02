@@ -34,6 +34,9 @@ if ( $seq ) {
 }
 close IN;
 
+#my $maxFamilies = 5000;
+my $maxFamilies = 105000;
+my $famIdx = 0;
 open OUT,">tmpSeqs.fa" or die;
 while ( <> ) {
   # Key: 1126, Neighbor: Neighbor { min_distance: 0.18799205, label_count: 2 }
@@ -59,12 +62,19 @@ while ( <> ) {
     if ( $label eq "" ) {
       $label = $seqs[$subj_idx]->[0];
     }
+    if ( $label_count > 4 ) {
     print OUT ">$label  $seqs[$subj_idx]->[0]\n$seqs[$subj_idx]->[1]\n";
+    $famIdx++;
+    }
+
+    last if ( $famIdx == $maxFamilies );
+    last if ( $distance > 0.15 );
+
   }
 }
 close OUT;
 
-system("/home/rhubley/projects/RepeatModeler/util/align.pl -force tmpSeqs.fa query.fasta");
+system("/home/rhubley/projects/RepeatModeler/util/align.pl -force tmpSeqs.fa -gap_init 25 -extension 5 -minmatch 7 query.fasta");
  
 
 exit;

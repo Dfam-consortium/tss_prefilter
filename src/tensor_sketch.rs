@@ -96,29 +96,76 @@ where
     pub fn compute_slide_sketch_2d(
         &self,
         seq: &[SeqType],
-        k: usize,
-        t: usize,
-        s: usize,
+        k_size: usize,
+        k_stride: usize,
+        t_size: usize,
+        t_stride: usize,
     ) -> Vec<Vec<f64>> {
 
-        let mut tensors = vec![vec![0.0; self.sketch_dim * ((((k-t) as f64 / s as f64).floor() as usize) + 1)]; (seq.len() as f64 / k as f64).floor() as usize];
+        let sketches_per_kmer = (((k_size-t_size) as f64 / t_stride as f64).floor() as usize) + 1;
+        let kmer_count = (((seq.len()-k_size) as f64 / k_stride as f64).floor() as usize) + 1;
+        let mut tensors = vec![vec![0.0; self.sketch_dim * sketches_per_kmer]; kmer_count];
  
-        for i in (0..=seq.len()-k).step_by(k) {
-            let outer_subseq = &seq[i..i + k];
-            let window_index = i / k;
+        for i in (0..=seq.len()-k_size).step_by(k_stride) {
+            let outer_subseq = &seq[i..i + k_size];
+            let window_index = i / k_stride;
+            
+            println!();
+            print!("KMER[{}]: ", window_index);
+            for k in 0..outer_subseq.len() {
+                if outer_subseq[k].into() == 0  {
+                  print!("A");
+                } else if outer_subseq[k].into() == 1 {
+                  print!("C");
+                } else if outer_subseq[k].into() == 2 {
+                  print!("G");
+                } else if outer_subseq[k].into() == 3 {
+                  print!("T");
+                }
+            } 
+            println!();
 
-            for j in (0..=k - t).step_by(s) {
-                let inner_subseq = &outer_subseq[j..j + t];
+            for j in (0..=k_size - t_size).step_by(t_stride) {
+                let inner_subseq = &outer_subseq[j..j + t_size];
+
+                print!("T        ");
+                for k in 0..j {
+                  print!(" ");
+                }
+                for k in 0..inner_subseq.len() {
+                    if inner_subseq[k].into() == 0  {
+                      print!("A");
+                    } else if inner_subseq[k].into() == 1 {
+                      print!("C");
+                    } else if inner_subseq[k].into() == 2 {
+                      print!("G");
+                    } else if inner_subseq[k].into() == 3 {
+                      print!("T");
+                    }
+                }
+                println!();
+
                 let tensor = self.compute_sketch(inner_subseq);
 
                 // Determine the position to store the tensor in the 2D vector
-                let tensor_index = (j / s) * self.sketch_dim;
+                let tensor_index = (j / t_stride) * self.sketch_dim;
       
                 // Store the tensor in the appropriate position
                 for (idx, &value) in tensor.iter().enumerate() {
                     tensors[window_index][tensor_index + idx] = value;
                 }
             }
+
+            let mut tid = 0;
+            for j in (0..=k_size - t_size).step_by(t_stride) {
+                //print!("S: ");
+                for k in 0..self.sketch_dim {
+                    print!("{:+.4}, ", tensors[window_index][tid]);
+                    tid = tid + 1;
+                }
+                println!();
+            }
+            
         }
         tensors
     }
@@ -141,9 +188,42 @@ where
         for i in (0..=seq.len()-k_size).step_by(k_stride) {
             let outer_subseq = &seq[i..i + k_size];
 
+            //println!();
+            //print!("KMER[{}]: ", i / k_stride);
+            //for k in 0..outer_subseq.len() {
+            //    if outer_subseq[k].into() == 0  {
+            //      print!("A");
+            //    } else if outer_subseq[k].into() == 1 {
+            //      print!("C");
+            //    } else if outer_subseq[k].into() == 2 {
+            //      print!("G");
+            //    } else if outer_subseq[k].into() == 3 {
+            //      print!("T");
+            //    }
+           // }
+            //println!();
+
+
             for j in (0..=k_size - t_size).step_by(t_stride) {
                 let inner_subseq = &outer_subseq[j..j + t_size];
+
+                //print!("Subsequence: ");
+                //for k in 0..inner_subseq.len() {
+                //    if inner_subseq[k].into() == 0  {
+                //      print!("A");
+                //    } else if inner_subseq[k].into() == 1 {
+                //      print!("C");
+                //    } else if inner_subseq[k].into() == 2 {
+                //      print!("G");
+                //    } else if inner_subseq[k].into() == 3 {
+                //      print!("T");
+                //    }
+               // }
+               // println!();
+
                 let tensor = self.compute_sketch(inner_subseq);
+
+                //println!("Tensor: {:?}", tensor);
 
                 // Store the tensor in the appropriate position
                 for (idx, &value) in tensor.iter().enumerate() {
@@ -176,6 +256,7 @@ mod tests {
     use super::*;
 
     #[test]
+    // Compare implementation with output of graph_align
     fn test_compute_sketch() {
         let alphabet_size = 4;
         let sketch_dim = 14;
@@ -184,6 +265,7 @@ mod tests {
 
         let mut tensor: TensorSketch<u8> = TensorSketch::new(alphabet_size, sketch_dim, subsequence_len, seed);
 
+        // Fixed pairwise hashes (generated randomly by graph_align)
         let h = vec![
             vec![7, 10, 8, 7],
             vec![5, 9, 6, 12],
@@ -203,9 +285,11 @@ mod tests {
 
         tensor.set_hashes_for_testing(h, s);
 
+        // Example for which we have output from graph_align
         let sequence = vec![1, 3, 3, 0, 3, 1, 0, 0, 3, 0, 1, 3, 2, 2, 1, 1];
         let sketch = tensor.compute_sketch(&sequence);
 
+        // graph_align output
         let expected_sketch = vec![
             0.0161088911088911,
            -0.026598401598401596,
@@ -227,4 +311,48 @@ mod tests {
             assert!((a - b).abs() < f64::EPSILON);
         }
     }
+
+    #[test]
+    // Compare implementation with simple example that we can validate by hand
+    fn test_compute_paper_sketch() {
+        let alphabet_size = 4;
+        let sketch_dim = 3;
+        let subsequence_len = 2;
+        let seed = 0;
+
+        let mut tensor: TensorSketch<u8> = TensorSketch::new(alphabet_size, sketch_dim, subsequence_len, seed);
+
+        // Pairwise hash functions
+        let h = vec![
+            vec![2, 1, 0, 2],
+            vec![0, 0, 1, 2],
+        ];
+        let s = vec![
+            vec![true, true, false, true],
+            vec![true, false, false, false],
+        ];
+
+        tensor.set_hashes_for_testing(h, s);
+
+        // Alphabet encoding: ACGT = 0, 1, 2, 3
+        // Example string: GACGC
+        let sequence = vec![2, 0, 1, 2, 1];
+        let sketch = tensor.compute_sketch(&sequence);
+
+        let expected_sketch = vec![
+            0.1,
+            0.0,
+            -0.3,
+        ];
+
+        //for (a, b) in sketch.iter().zip(expected_sketch.iter()) {
+        //    print!("a: {}, b: {}\n", a, b);
+        //}
+
+        for (a, b) in sketch.iter().zip(expected_sketch.iter()) {
+            assert!((a - b).abs() < f64::EPSILON);
+        }
+
+    }
+
 }

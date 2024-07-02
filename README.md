@@ -97,8 +97,8 @@ installed a RepeatMasker/RepeatModeler distribution on your system.
  * Dfam_3.6 ( 732,993 TE sequences, 968 mbases )
     * Index Build: 1hr 56min on 64 cores, 128GB RAM (on machine...not necessarily used)
     * Index Size: 8.9GB
-    * Searching SVA took 8.3 seconds ( TODO: need to break out index search vs result [eg. sorting and duplicate removal] processing time ).  This produced 19,874 candidates.
-    * Aligning (threads=4) SVA to the 19,874 candidates took 24s (692 alignments)
+    * Searching SVA took 8.3 seconds, searching 1308 kmers fwd and reverse (SVA_A 1387bp) for 10 nearest neighbors each, producing 26160 neighbors, comprising 19,887 unique families.
+    * Aligning (threads=4) SVA to the 19,887 candidates took 24s (692 alignments)
     * Aligning (threads=4) SVA to the full 732,993 TE set took 9 min 51s (3112 alignments)
     * NOTE: Expected results of Alu/HERVK were not returned in this search as there are many results that are equally distant in the larger index. Choice of nearest neighbor parameter will impact this but also increase the number of candidates requiring alignment.  
 
@@ -109,6 +109,14 @@ installed a RepeatMasker/RepeatModeler distribution on your system.
    * Aligning (threads=4) SVA to the 21,557 candidates tool 27s and produced 585 alignments (missing Alu/HERVK, but finding LTR5 other SVAs etc.)
    * Aligning (threads=4) SVA to the full 3.5M TE set took
    * At 10 nearest neighbors Alu/HERVK are missed owing the the large number of equivalent distances (to DR records) in the index. Increasing the nearest neighbor parameter will increase the number of candidates requiring alignment.  This is a tradeoff between sensitivity and the number of candidates requiring alignment.
+
+   * RERUN: Build with new parameters: 321705.01user 787.23system 1:44:21elapsed 5150%CPU (0avgtext+0avgdata 56625172maxresident)k
+471720inputs+88994824outputs (527major+149109052minor)pagefaults 0swaps 
+   * 45 GB index
+   * DFAM 38 curated only ( /bin/time ../target/release/tss_prefilter --build > build.log
+1449.20user 6.05system 0:57.97elapsed 2510%CPU (0avgtext+0avgdata 961704maxresident)k
+97680inputs+945296outputs (6major+999604minor)pagefaults 0swaps
+   * 484 MB index
 
 
 ## Implementation Details and Work in Progress
