@@ -106,12 +106,14 @@ where
         let kmer_count = (((seq.len()-k_size) as f64 / k_stride as f64).floor() as usize) + 1;
         let mut tensors = vec![vec![0.0; self.sketch_dim * sketches_per_kmer]; kmer_count];
  
+        // TODO: Consider relaxing the stride for the final window to cover the entire sequence
+        //       with a little extra redundancy.
         for i in (0..=seq.len()-k_size).step_by(k_stride) {
             let outer_subseq = &seq[i..i + k_size];
             let window_index = i / k_stride;
             
             println!();
-            print!("KMER[{}]: ", window_index);
+            print!("KMER[{}, t={}]: ", window_index, t_size);
             for k in 0..outer_subseq.len() {
                 if outer_subseq[k].into() == 0  {
                   print!("A");
@@ -185,6 +187,8 @@ where
         let mut tensors = vec![0.0; self.sketch_dim * sketches_per_kmer * kmer_count];
  
         let mut tensor_index = 0;
+        // TODO: Consider relaxing the stride for the final window to cover the entire sequence
+        //       with a little extra redundancy.
         for i in (0..=seq.len()-k_size).step_by(k_stride) {
             let outer_subseq = &seq[i..i + k_size];
 
@@ -313,8 +317,45 @@ mod tests {
     }
 
     #[test]
-    // Compare implementation with simple example that we can validate by hand
-    fn test_compute_paper_sketch() {
+    // Compare implementation with simple example that we can compute by hand (tuple = 1)
+    fn test_byhand_comparison_t1() {
+        let alphabet_size = 4;
+        let sketch_dim = 3; 
+        let subsequence_len = 1;
+        let seed = 0;
+
+        let mut tensor: TensorSketch<u8> = TensorSketch::new(alphabet_size, sketch_dim, subsequence_len, seed);
+
+        // Pairwise hash functions
+        let h = vec![
+            vec![1, 1, 2, 0],
+        ];
+        let s = vec![
+            vec![false, false, false, true],
+        ];
+
+        tensor.set_hashes_for_testing(h, s);
+
+        // Alphabet encoding: ACGT = 0, 1, 2, 3
+        // Example string: GACGC
+        let sequence = vec![2, 0, 1, 2, 1];
+        let sketch = tensor.compute_sketch(&sequence);
+
+        let expected_sketch = vec![
+            0.0,
+            -0.6,
+            -0.4,
+        ];
+
+        for (a, b) in sketch.iter().zip(expected_sketch.iter()) {
+            assert!((a - b).abs() < f64::EPSILON);
+        }
+
+    }
+
+    #[test]
+    // Compare implementation with simple example that we can validate by hand (tuple = 2)
+    fn test_byhand_comparison_t2() {
         let alphabet_size = 4;
         let sketch_dim = 3;
         let subsequence_len = 2;
@@ -345,14 +386,11 @@ mod tests {
             -0.3,
         ];
 
-        //for (a, b) in sketch.iter().zip(expected_sketch.iter()) {
-        //    print!("a: {}, b: {}\n", a, b);
-        //}
-
         for (a, b) in sketch.iter().zip(expected_sketch.iter()) {
             assert!((a - b).abs() < f64::EPSILON);
         }
 
     }
+
 
 }

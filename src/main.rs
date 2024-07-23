@@ -146,11 +146,17 @@ The index is comprised of Tensor Slide Sketches stored in Facebook AI Similarity
     //let w_param = 16;  // AKA windows size
 
     // Set #2: 80,15,7,1,20 0.892 Sp. Corr @ len 135
+    //let k_param = 80;
+    //let sketch_dim = 15;
+    //let s_param = 7;
+    //let subsequence_len = 1;
+    //let w_param = 20;
+
     let k_param = 80;
-    let sketch_dim = 15;
-    let s_param = 7;
+    let sketch_dim = 4;
+    let s_param = 4;
     let subsequence_len = 1;
-    let w_param = 20;
+    let w_param = 13;
 
     // #2-a 80,7,4,1,13  0.894381 Sp. Corr @ len 119
     // #2-b 80,9,4,1,14  0.89689 Sp. Corr @ len 153
@@ -158,10 +164,17 @@ The index is comprised of Tensor Slide Sketches stored in Facebook AI Similarity
     // Set #4 80,14,4,1,13  0.901 Sp. Corr @ len 238!
 
     let seed = 0; // Seed for the random number generator
+ 
 
     // Create a TensorSketch instance
-    let tensor: TensorSketch<u8> = TensorSketch::new(alphabet_size, sketch_dim, subsequence_len, seed);
+    let mut tensor: TensorSketch<u8> = TensorSketch::new(alphabet_size, sketch_dim, subsequence_len, seed);
 
+    if subsequence_len == 1 && sketch_dim == 4 {
+      println!("WARNING: Using hardcoded translation hashes for 1-tuple sketching.");
+      let h = vec![ vec![0, 1, 2, 3] ];
+      let s = vec![ vec![true, false, false, false] ];
+      tensor.set_hashes_for_testing(h, s);
+    }
 
     // Experiment #1
     // Take two sequences A and B, and compute the minimum distance between any 1-bp shifted
@@ -190,7 +203,7 @@ The index is comprised of Tensor Slide Sketches stored in Facebook AI Similarity
                        }
                    }
                    //println!("Minimum distance between A[{}] and B[{}]: {:?}", i, min_distance_index, min_distance);
-                   println!("{},{},{}", i, min_distance_index, min_distance);
+                   println!("{},{},{}", i, (min_distance_index*80), min_distance);
                 }
             }
             Err(e) => eprintln!("Error parsing FASTA file: {:?}", e),
@@ -289,7 +302,7 @@ The index is comprised of Tensor Slide Sketches stored in Facebook AI Similarity
         let mut index = read_index("index.faiss").unwrap();
         println!("# Read index into memory in {:?}", t.elapsed());
 
-        let nearest_neighbors = 40;
+        let nearest_neighbors = 20;
         t = Instant::now();
         match parse_fasta("query.fasta") {
             Ok(sequences) => {

@@ -68,7 +68,7 @@ while ( <> ) {
     }
 
     last if ( $famIdx == $maxFamilies );
-    last if ( $distance > 0.15 );
+    #last if ( $distance > 1 );
 
   }
 }
