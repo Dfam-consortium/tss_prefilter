@@ -1,7 +1,10 @@
+use std::cmp::Ordering;
 use std::collections::HashMap;
+use std::collections::BinaryHeap;
 use std::fs::File;
 use std::io::{BufReader, BufRead, Result};
 use std::time::Instant;
+use rand::Rng;
 
 use clap::Args;
 use clap::Command;
@@ -17,6 +20,41 @@ pub mod tensor_sketch;
 use tensor_sketch::TensorSketch;
 
 
+fn edit_distance<T: PartialEq>(s1: &[T], s2: &[T]) -> usize {
+    let m = s1.len();
+    let n = s2.len();
+
+    if m == 0 {
+        return n;
+    }
+    if n == 0 {
+        return m;
+    }
+
+    let mut costs = vec![0; n + 1];
+
+    for k in 0..=n {
+        costs[k] = k;
+    }
+
+    for (i, it1) in s1.iter().enumerate() {
+        costs[0] = i + 1;
+        let mut corner = i;
+
+        for (j, it2) in s2.iter().enumerate() {
+            let upper = costs[j + 1];
+            if it1 == it2 {
+                costs[j + 1] = corner;
+            } else {
+                let t = if upper < corner { upper } else { corner };
+                costs[j + 1] = if costs[j] < t { costs[j] } else { t } + 1;
+            }
+
+            corner = upper;
+        }
+    }
+    costs[n]
+}
 
 fn parse_fasta(filename: &str) -> Result<Vec<Vec<u8>>> {
     let file = File::open(filename)?;
@@ -96,6 +134,14 @@ struct CLI {
     /// Experiment #1: Compute the minimum distance between any 1-bp shifted window (k_param) of A to any non-overlapping window of B
     #[arg(short, long)]               
     exp1: bool,           
+   
+    /// Experiment #2: Compute the minimum distance between any 1-bp shifted window (k_param) of query.fasta to any non-overlapping window of sequences.fasta
+    #[arg(short, long)]               
+    exp2: bool,           
+    
+    /// Experiment #3: Compute the average magnitude of the sketches over a sequence
+    #[arg(short, long)]               
+    exp3: bool,           
 }
 
 fn main() {
@@ -123,6 +169,13 @@ The index is comprised of Tensor Slide Sketches stored in Facebook AI Similarity
     #   - Compute the minimum distance between any 1-bp shifted window (k_param) of A to any non-overlapping window of B
     ./tss_prefilter --exp1 
 
+    # Experiment #2 (expects query.fasta and sequences.fasta to already exist )
+    #   - Compute the minimum distance between any 1-bp shifted window (k_param) of query to any non-overlapping window of sequences
+    ./tss_prefilter --exp2
+    
+    # Experiment #3: Compute the average magnitude of the sketches over a sequence
+    ./tss_prefilter --exp3
+
 {all-args}{after-help}
 ",
     );
@@ -139,11 +192,19 @@ The index is comprised of Tensor Slide Sketches stored in Facebook AI Similarity
     // 
     // Metagraph Parameters 0.629 Sp. Corr @ len 126:
     //
+    let k_param = 80;
+    let sketch_dim = 14;
+    let s_param = 8;   // AKA stride length
+    let subsequence_len = 6; // AKA tuple length
+    let w_param = 16;  // AKA windows size
+
+    // Set #1.....just lowering tuple size
     //let k_param = 80;
     //let sketch_dim = 14;
     //let s_param = 8;   // AKA stride length
-    //let subsequence_len = 6; // AKA tuple length
+    //let subsequence_len = 3; // AKA tuple length
     //let w_param = 16;  // AKA windows size
+
 
     // Set #2: 80,15,7,1,20 0.892 Sp. Corr @ len 135
     //let k_param = 80;
@@ -152,11 +213,12 @@ The index is comprised of Tensor Slide Sketches stored in Facebook AI Similarity
     //let subsequence_len = 1;
     //let w_param = 20;
 
-    let k_param = 80;
-    let sketch_dim = 4;
-    let s_param = 4;
-    let subsequence_len = 1;
-    let w_param = 13;
+    // my preferred set
+    //let k_param = 80;
+    //let sketch_dim = 4;
+    //let s_param = 4;
+    //let subsequence_len = 1;
+    //let w_param = 13;
 
     // #2-a 80,7,4,1,13  0.894381 Sp. Corr @ len 119
     // #2-b 80,9,4,1,14  0.89689 Sp. Corr @ len 153
@@ -210,12 +272,203 @@ The index is comprised of Tensor Slide Sketches stored in Facebook AI Similarity
         }
     }
 
+    //
+    // Experiment #3: 
+    //   Given query.fasta, sketch all subsequences up to a given number of times (replicates),
+    //   and calculate the average magnitude of sketches for each subsequence.
+    //
+    if args.exp3 {
+        let replicates = 1000;
+        let mut rng = rand::thread_rng();
+        println!("Reading sequences from query.fa and computing average sketch magnitudes"); 
+        match parse_fasta("query.fasta") {
+            Ok(sequences) => {
+                let mut mags: Vec<f64> = vec![0.0; sequences[0].len()];
+                for i in 0..replicates {
+                    let seed: u64 = rng.gen();
+                    // Create a TensorSketch instance
+                    //println!("Replicate {}: seed={:?}", i, seed);
+                    tensor = TensorSketch::new(alphabet_size, sketch_dim, subsequence_len, seed);
+                    let q_sketches = tensor.compute_slide_sketch_2d(&sequences[0], k_param, 1, w_param, s_param);
+                    for (i, q_sketch) in q_sketches.iter().enumerate() {
+                        let v_magnitude = TensorSketch::<u8>::vector_magnitude(&q_sketch);
+                        mags[i] += v_magnitude;
+                    }
+                }   
+                for i in 0..sequences[0].len() {
+                    println!("avgmag,{},{:?}", i, mags[i] / replicates as f64);
+                }
+            }
+            Err(e) => eprintln!("Error parsing FASTA file: {:?}", e),
+        }
+    }
+
+    // Experiment #2
+    //   Identify the N closest neighbors to a query sequence (query.fasta) subsequences given a 
+    //   small subject sequence (sequences.fasta, single sequence only) using brute force ( not FAISS ).
+    if args.exp2 {
+
+        #[derive(Debug)]
+        struct DistanceInfo {
+            distance: f64,
+            //l2_dist: f64,
+            //dot_prod: f64,
+            //cos_sim: f64,
+            ed: usize,
+            seq_index: usize,
+            pos_index: usize,
+        }
+
+        //const metric: &str = "dot_product";
+        //const metric: &str = "cosine_similarity";
+        //const metric: &str = "l2_distance";
+        //const metric: &str = "normalized_dot_product";
+        const metric: &str = "edit_distance";
+
+        // Sort order for distance metrics
+        impl Ord for DistanceInfo {
+            fn cmp(&self, other: &Self) -> Ordering {
+                if metric == "dot_product" || metric == "cosine_similarity" || metric == "normalized_dot_product" ||
+                   metric == "edit_distance" { 
+                    // Find maximum metric ( closest matching )
+                    self.distance.partial_cmp(&other.distance).unwrap()
+                } else {
+                    // Find minimum metric ( closest matching )
+                    other.distance.partial_cmp(&self.distance).unwrap()
+                }
+            }
+        }
+
+        impl PartialOrd for DistanceInfo {
+            fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+                Some(self.cmp(other))
+            }
+        }
+
+        impl PartialEq for DistanceInfo {
+            fn eq(&self, other: &Self) -> bool {
+                self.distance == other.distance
+            }
+        }
+
+        impl Eq for DistanceInfo {}
+        let neighbors = 20;
+        let mut q_sketches = Vec::new();
+        println!("Running experiment #3: Metric={}", metric);
+        println!("Reading query.fasta and computing sketches for each subsequence...");
+        let mut q_sequence = Vec::new();
+        match parse_fasta("query.fasta") {
+            Ok(sequences) => {
+               q_sketches = tensor.compute_slide_sketch_2d(&sequences[0], k_param, 1, w_param, s_param);
+               q_sequence = sequences[0].clone();
+            }
+            Err(e) => eprintln!("Error parsing FASTA file: {:?}", e),
+        }
+
+        let mut closest_distances: Vec<BinaryHeap<DistanceInfo>> = Vec::with_capacity(q_sketches.len());
+        for _ in 0..q_sketches.len() {
+            closest_distances.push(BinaryHeap::new());
+        }
+
+        //for (i, q_sketch) in q_sketches.iter().enumerate() {
+        //    let v_magnitude = TensorSketch::<u8>::vector_magnitude(&q_sketch);
+        //    println!("vmag,{},{:?}", i, v_magnitude);
+        //}
+
+        match parse_fasta("sequences.fasta") {
+            Ok(sequences) => {
+                // Lazy....this should only process the first sequence if multiple are present
+                for (s, sequence) in sequences.iter().enumerate() {
+                    println!("Sketching sequence {}", s + 1);
+                    let mut s_sketches = tensor.compute_slide_sketch_2d(&sequence, k_param, 1, w_param, s_param);
+                    for (i, mut q_sketch) in q_sketches.iter_mut().enumerate() {
+                        if metric == "normalized_dot_product" {
+                            TensorSketch::<u8>::normalize_vector(&mut q_sketch);
+                        }
+                        for (j, mut s_sketch) in s_sketches.iter_mut().enumerate() {
+                            let qseq = &q_sequence[i..i + k_param];
+                            let sseq = &sequence[j..j + k_param];
+
+                            let ed = edit_distance(qseq, sseq);
+
+                            let mut distance = 0.0;
+                            if metric == "l2_distance" {
+                                distance = TensorSketch::<u8>::l2_dist(&mut q_sketch, &mut s_sketch);
+                            } else if metric == "dot_product" {
+                                distance = TensorSketch::<u8>::dot_product(&mut q_sketch, &mut s_sketch);
+                            } else if metric == "cosine_similarity" {
+                                distance = TensorSketch::<u8>::cosine_similarity(&mut q_sketch, &mut s_sketch);
+                            } else if metric == "normalized_dot_product" {
+                                TensorSketch::<u8>::normalize_vector(&mut s_sketch);
+                                distance = TensorSketch::<u8>::dot_product(&mut q_sketch, &mut s_sketch);
+                            } else if metric == "edit_distance" {
+                                distance = (80 as f64 - ed as f64)/80 as f64;
+                            } else {
+                                panic!("Unknown metric: {:?}", metric);
+                            }
+                            //let distance = (80 as f64 - ed as f64)/80 as f64;
+                            //println!("Distance between q_sketch pos {} and s_sketch-{} pos {}: {:?}", i, s, /j, distance);
+                            //println!("Distance between q_sketch pos {} and s_sketch-{} pos {}: ed={:?}, l2={:?}, dot={:?}, cos={:?}", i, s, j, ed, l2_dist, dot_prod, cos_sim);
+
+                            //let dist_info = DistanceInfo {
+                            //    distance: distance, seq_index: s, pos_index: j };
+                            let dist_info = DistanceInfo {
+                                //distance: distance, l2_dist: l2_dist, dot_prod: dot_prod, 
+                                //          cos_sim: cos_sim, ed: ed, seq_index: s, pos_index: j;
+                                distance: distance, ed: ed, seq_index: s, pos_index: j 
+                              };
+                            let heap = &mut closest_distances[i];
+
+                            if  heap.len() < neighbors {
+                                heap.push(dist_info);
+                            }else if metric == "dot_product" || metric == "cosine_similarity" || metric == "normalized_dot_product" ||
+                                     metric == "edit_distance" {
+                                // Maximum distances 
+                                if heap.peek().unwrap().distance < distance {
+                                    heap.pop();
+                                    heap.push(dist_info);
+                                }
+                            }else if heap.peek().unwrap().distance > distance {
+                                // Minimium distances
+                                heap.pop();
+                                heap.push(dist_info);
+                            }
+                        }
+                   }
+                }
+            }
+            Err(e) => eprintln!("Error parsing FASTA file: {:?}", e),
+        }
+
+        for (i, heap) in closest_distances.iter().enumerate() {
+            println!("{},{},{:?},{:?}", metric, i, heap.peek().unwrap().distance,((80 as f64 - heap.peek().unwrap().ed as f64)/80 as f64));
+            //println!("Closest distances for q_sketch {}: {:?}", i, heap);
+        }
+    }
+
+
+    // For FAISS testing
+    let use_cosine_similarity = 1;
+ 
     if args.build {
+        let mut normalize: bool = false;
+        if ( use_cosine_similarity == 1 ) {
+          println!("Using cosine similarity");
+          normalize = true;
+        }else {
+            println!("Using L2 distance");
+        }
+
         // Create a new index
         println!("Initializing the index...");
         let mut t = Instant::now();
         let num_sketches_in_kmer = ((k_param - w_param + 1) as f64 / s_param as f64).ceil() as u32; 
-        let index = index_factory(sketch_dim as u32 * num_sketches_in_kmer, "HNSW32", faiss::MetricType::L2).unwrap();
+        let index;
+        if ( use_cosine_similarity == 1 ) {
+          index = index_factory(sketch_dim as u32 * num_sketches_in_kmer, "HNSW32", faiss::MetricType::InnerProduct).unwrap();
+        }else {
+          index = index_factory(sketch_dim as u32 * num_sketches_in_kmer, "HNSW32", faiss::MetricType::L2).unwrap();
+        }
         let sketch_vec_size = num_sketches_in_kmer as usize * sketch_dim as usize;
         let mut index = IdMap::new(index).unwrap();
         println!("  Index initialized in {:?}", t.elapsed());
@@ -252,7 +505,7 @@ The index is comprised of Tensor Slide Sketches stored in Facebook AI Similarity
                     if sequence.len() < 100 {
                             continue;
                     }
-                    let sketches = tensor.compute_slide_sketch_1d(&sequence, k_param, k_param, w_param, s_param);
+                    let sketches = tensor.compute_slide_sketch_1d(&sequence, k_param, k_param, w_param, s_param, normalize);
 
                     //println!("Sketches of the sequence: {:?}", sketches);
     
@@ -302,14 +555,22 @@ The index is comprised of Tensor Slide Sketches stored in Facebook AI Similarity
         let mut index = read_index("index.faiss").unwrap();
         println!("# Read index into memory in {:?}", t.elapsed());
 
-        let nearest_neighbors = 20;
+        let mut normalize: bool = false;
+        if ( use_cosine_similarity == 1 ) {
+          println!("Using cosine similarity");
+          normalize = true;
+        }else {
+            println!("Using L2 distance");
+        }
+
+        let nearest_neighbors = 40;
         t = Instant::now();
         match parse_fasta("query.fasta") {
             Ok(sequences) => {
                 for (i, sequence) in sequences.iter().enumerate() {
                     println!("Sketching Query {}", i + 1);
                     
-                    let sketches = tensor.compute_slide_sketch_1d(&sequence, k_param, 1, w_param, s_param);
+                    let sketches = tensor.compute_slide_sketch_1d(&sequence, k_param, 1, w_param, s_param, normalize);
 
                     //println!("Sketches of the query: {:?}", sketches.len());
                     //println!("Sketches of the query: {:?}", sketches);
@@ -321,7 +582,7 @@ The index is comprised of Tensor Slide Sketches stored in Facebook AI Similarity
                     println!("forward distances: {:?}", result.distances);
 
                     let rc_sequence = reverse_complement(&sequence);
-                    let rc_sketches = tensor.compute_slide_sketch_1d(&rc_sequence, k_param, 1, w_param, s_param);
+                    let rc_sketches = tensor.compute_slide_sketch_1d(&rc_sequence, k_param, 1, w_param, s_param, normalize);
                     let rc_result = index.search(&rc_sketches, nearest_neighbors).unwrap();
 
                     println!("total reverse results: {:?}", rc_result.distances.len());

@@ -102,50 +102,60 @@ where
         t_stride: usize,
     ) -> Vec<Vec<f64>> {
 
+        let debug = false;
+
         let sketches_per_kmer = (((k_size-t_size) as f64 / t_stride as f64).floor() as usize) + 1;
         let kmer_count = (((seq.len()-k_size) as f64 / k_stride as f64).floor() as usize) + 1;
         let mut tensors = vec![vec![0.0; self.sketch_dim * sketches_per_kmer]; kmer_count];
  
+        if seq.len() < k_size {
+            return tensors;
+        }
+
         // TODO: Consider relaxing the stride for the final window to cover the entire sequence
         //       with a little extra redundancy.
         for i in (0..=seq.len()-k_size).step_by(k_stride) {
             let outer_subseq = &seq[i..i + k_size];
             let window_index = i / k_stride;
             
-            println!();
-            print!("KMER[{}, t={}]: ", window_index, t_size);
-            for k in 0..outer_subseq.len() {
-                if outer_subseq[k].into() == 0  {
-                  print!("A");
-                } else if outer_subseq[k].into() == 1 {
-                  print!("C");
-                } else if outer_subseq[k].into() == 2 {
-                  print!("G");
-                } else if outer_subseq[k].into() == 3 {
-                  print!("T");
-                }
-            } 
-            println!();
+            if debug {
+                println!();
+                print!("KMER[{}, t={}]: ", window_index, t_size);
+                for k in 0..outer_subseq.len() {
+                    if outer_subseq[k].into() == 0  {
+                      print!("A");
+                    } else if outer_subseq[k].into() == 1 {
+                      print!("C");
+                    } else if outer_subseq[k].into() == 2 {
+                      print!("G");
+                    } else if outer_subseq[k].into() == 3 {
+                      print!("T");
+                    }
+                } 
+                println!();
+            }
 
             for j in (0..=k_size - t_size).step_by(t_stride) {
                 let inner_subseq = &outer_subseq[j..j + t_size];
 
-                print!("T        ");
-                for k in 0..j {
-                  print!(" ");
-                }
-                for k in 0..inner_subseq.len() {
-                    if inner_subseq[k].into() == 0  {
-                      print!("A");
-                    } else if inner_subseq[k].into() == 1 {
-                      print!("C");
-                    } else if inner_subseq[k].into() == 2 {
-                      print!("G");
-                    } else if inner_subseq[k].into() == 3 {
-                      print!("T");
+                if debug {
+                    print!("T        ");
+                    for k in 0..j {
+                      print!(" ");
                     }
+                    for k in 0..inner_subseq.len() {
+                        if inner_subseq[k].into() == 0  {
+                          print!("A");
+                        } else if inner_subseq[k].into() == 1 {
+                          print!("C");
+                        } else if inner_subseq[k].into() == 2 {
+                          print!("G");
+                        } else if inner_subseq[k].into() == 3 {
+                          print!("T");
+                        }
+                    }
+                    println!();
                 }
-                println!();
 
                 let tensor = self.compute_sketch(inner_subseq);
 
@@ -160,12 +170,18 @@ where
 
             let mut tid = 0;
             for j in (0..=k_size - t_size).step_by(t_stride) {
-                //print!("S: ");
+                if debug {
+                    print!("S: ");
+                }
                 for k in 0..self.sketch_dim {
-                    print!("{:+.4}, ", tensors[window_index][tid]);
+                    if debug {
+                        print!("{:+.4}, ", tensors[window_index][tid]);
+                    }
                     tid = tid + 1;
                 }
-                println!();
+                if debug {
+                    println!();
+                }
             }
             
         }
@@ -179,6 +195,7 @@ where
         k_stride: usize,
         t_size: usize,
         t_stride: usize,
+        normalize: bool,
     ) -> Vec<f32> {
 
         let sketches_per_kmer = (((k_size-t_size) as f64 / t_stride as f64).floor() as usize) + 1;
@@ -225,16 +242,22 @@ where
                // }
                // println!();
 
-                let tensor = self.compute_sketch(inner_subseq);
+                let mut tensor = self.compute_sketch(inner_subseq);
+
+                if normalize {
+                    //self.normalize_vector(&mut tensor);
+                    TensorSketch::<u8>::normalize_vector(&mut tensor);
+                }
 
                 //println!("Tensor: {:?}", tensor);
 
                 // Store the tensor in the appropriate position
                 for (idx, &value) in tensor.iter().enumerate() {
-                    tensors[tensor_index + idx] = value as f32;
+                    tensors[tensor_index + idx] = value as f32; 
                 }
                 tensor_index += self.sketch_dim;
             }
+
         }
         tensors
     }
@@ -244,15 +267,58 @@ where
         self.signs = s;
     }
 
+    pub fn vector_magnitude(a: &[f64]) -> f64 {
+        a.iter()
+            .map(|x| x * x)
+            .sum::<f64>()
+            .sqrt()
+    }
+
+    pub fn normalize_vector(vec: &mut [f64]) {
+        let norm = vec.iter().map(|&x| x * x).sum::<f64>().sqrt();
+
+        if norm != 0.0 {
+            for x in vec.iter_mut() {
+                *x /= norm;
+            }
+        }
+    }
+
+
     pub fn l2_dist(a: &[f64], b: &[f64]) -> f64 {
+        // Print out the value pairs
+        //for (val_a, val_b) in a.iter().zip(b.iter()) {
+        //    println!("L2 dist Value pair: ({}, {})", val_a, val_b);
+        //}
         a.iter().zip(b.iter())
             .map(|(x, y)| (x - y) * (x - y))
             .sum::<f64>()
             .sqrt()
     }
 
-}
+    // TODO: Does this suffer from catastrophic cancellation?
+    //      If so, we should use a more numerically stable implementation
+    //      like the Kahan summation algorithm
+    pub fn dot_product(a: &Vec<f64>, b: &Vec<f64>) -> f64 {
+        if a.len() != b.len() {
+            panic!("Vectors must be of the same length");
+        }
+        a.iter().zip(b.iter()).map(|(x, y)| x * y).sum()
+    }
 
+    pub fn cosine_similarity(a: &Vec<f64>, b: &Vec<f64>) -> f64 {
+        if a.len() != b.len() {
+            panic!("Vectors must be of the same length");
+        }
+
+        let dot_product: f64 = a.iter().zip(b.iter()).map(|(ai, bi)| ai * bi).sum();
+        let norm_a: f64 = a.iter().map(|ai| ai * ai).sum::<f64>().sqrt();
+        let norm_b: f64 = b.iter().map(|bi| bi * bi).sum::<f64>().sqrt();
+
+        dot_product / (norm_a * norm_b)
+    }
+
+}
 
 
 #[cfg(test)]
